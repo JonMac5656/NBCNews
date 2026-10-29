@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Narooma Bowls Club: Message</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#eef3f7;--surface:#fff;--ink:#12213a;--muted:#55657a;--line:#cdd8e3;
+  --navy:#17358a;--on-navy:#fff;--aqua:#0c8ea3;--err:#b3261e;--ok:#146c3a;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){color-scheme:dark;--bg:#0c1524;--surface:#15233a;--ink:#e8eef7;--muted:#9aaac0;--line:#2b3d58;--navy:#6f95ff;--on-navy:#0a1630;--aqua:#4ac3d6;--err:#ff8a80;--ok:#7be0a1}
+}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0c1524;--surface:#15233a;--ink:#e8eef7;--muted:#9aaac0;--line:#2b3d58;--navy:#6f95ff;--on-navy:#0a1630;--aqua:#4ac3d6;--err:#ff8a80;--ok:#7be0a1}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45}
+main{max-width:44rem;margin:0 auto;padding:1.25rem 1.1rem 2rem}
+section{background:var(--surface);border:1.5px solid var(--line);border-radius:1rem;padding:1rem}
+label{display:block;font-weight:600;margin:0 0 .3rem}
+textarea,input{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1.5px solid var(--line);border-radius:.7rem;padding:.7rem .8rem}
+textarea{min-height:7rem;resize:vertical}
+:focus-visible{outline:3px solid var(--aqua);outline-offset:2px}
+.meta{font-size:.85rem;color:var(--muted);margin:.3rem 0 .9rem}
+.field{margin-bottom:.9rem}
+.hint{font-size:.85rem;color:var(--muted);margin:.3rem 0 0}
+.row{display:flex;gap:.7rem;flex-wrap:wrap}
+button{font:inherit;font-weight:600;border-radius:.7rem;padding:.7rem 1.2rem;cursor:pointer;border:1.5px solid var(--navy);background:transparent;color:var(--navy)}
+button.primary{background:var(--navy);color:var(--on-navy)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.shown{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border:1.5px solid var(--line);border-radius:.7rem;padding:.8rem .9rem;margin-bottom:.9rem}
+.delpanel{margin-top:.9rem;padding-top:.9rem;border-top:1px solid var(--line)}
+.msg{min-height:1.3em;font-size:.92rem;margin:.7rem 0 0;color:var(--muted)}
+.msg.err{color:var(--err)}
+.msg.ok{color:var(--ok)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <section>
+    <div id="compose">
+      <textarea id="text" aria-label="Message" placeholder="Type your message"></textarea>
+      <div class="meta" id="count">0 characters</div>
+      <div class="field" id="pwNewWrap">
+        <label for="pwNew">Create a password</label>
+        <input id="pwNew" type="password" autocomplete="new-password">
+        <p class="hint">Needed to delete the message later. At least 4 characters.</p>
+      </div>
+      <button class="primary" id="save" type="button">Save message</button>
+    </div>
+
+    <div id="saved" hidden>
+      <div class="shown" id="shown"></div>
+      <button id="delStart" type="button">Delete message</button>
+      <div class="delpanel" id="delPanel" hidden>
+        <label for="pwDel">Password</label>
+        <input id="pwDel" type="password" autocomplete="current-password">
+        <div class="row" style="margin-top:.7rem">
+          <button class="primary" id="delOk" type="button">Delete</button>
+          <button id="delCancel" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="msg" id="status" role="status"></p>
+  </section>
+</main>
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  var K_MSG='nbc-saved-message',K_PW='nbc-password';
+  var memory={},canStore=true;
+
+  try{localStorage.setItem('nbc-probe','1');localStorage.removeItem('nbc-probe');}catch(e){canStore=false;}
+  function get(k){if(canStore){try{return localStorage.getItem(k);}catch(e){canStore=false;}}return memory[k]||null;}
+  function put(k,v){if(canStore){try{localStorage.setItem(k,v);return;}catch(e){canStore=false;}}memory[k]=v;}
+  function drop(k){try{localStorage.removeItem(k);}catch(e){}delete memory[k];}
+
+  var hasCrypto=!!(window.crypto&&crypto.subtle&&window.TextEncoder);
+  function hex(buf){return Array.prototype.map.call(new Uint8Array(buf),function(x){return ('0'+x.toString(16)).slice(-2)}).join('');}
+  function hashPw(pw,salt){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(salt+':'+pw)).then(hex);}
+  function newSalt(){var a=new Uint8Array(16);crypto.getRandomValues(a);return hex(a);}
+
+  function say(t,cls){var s=$('status');s.textContent=t;s.className='msg'+(cls?' '+cls:'');}
+
+  function render(){
+    var saved=get(K_MSG);
+    $('compose').hidden=!!saved;
+    $('saved').hidden=!saved;
+    $('delPanel').hidden=true;$('pwDel').value='';
+    if(saved)$('shown').textContent=saved;
+    $('pwNewWrap').hidden=!!get(K_PW);
+    updateCount();
+  }
+  function updateCount(){
+    var n=$('text').value.length;
+    $('count').textContent=n+(n===1?' character':' characters');
+  }
+
+  $('text').addEventListener('input',function(){say('');updateCount();});
+
+  $('save').onclick=function(){
+    var t=$('text').value;
+    if(!t.trim()){say('Type a message first.','err');return;}
+    if(!hasCrypto){say('This browser can’t set a password here, so the message can’t be protected.','err');return;}
+    var finish=function(){
+      put(K_MSG,t);$('text').value='';$('pwNew').value='';render();
+      say(canStore?'Message saved.':'Message shown, but this browser can’t keep it after a refresh.',canStore?'ok':'err');
+    };
+    if(get(K_PW)){finish();return;}
+    var pw=$('pwNew').value;
+    if(pw.length<4){say('Create a password of at least 4 characters.','err');return;}
+    var salt=newSalt();
+    hashPw(pw,salt).then(function(h){put(K_PW,JSON.stringify({s:salt,h:h}));finish();});
+  };
+
+  $('delStart').onclick=function(){say('');$('delPanel').hidden=false;$('pwDel').focus();};
+  $('delCancel').onclick=function(){$('delPanel').hidden=true;$('pwDel').value='';say('');};
+  $('delOk').onclick=function(){
+    var rec;try{rec=JSON.parse(get(K_PW)||'null');}catch(e){rec=null;}
+    if(!rec){say('No password is set on this device.','err');return;}
+    hashPw($('pwDel').value,rec.s).then(function(h){
+      if(h===rec.h){drop(K_MSG);render();say('Message deleted.','ok');}
+      else{$('pwDel').value='';say('Wrong password.','err');}
+    });
+  };
+  $('pwDel').addEventListener('keydown',function(e){if(e.key==='Enter')$('delOk').click();});
+
+  render();
+})();
+</script>
+</body>
+</html>
